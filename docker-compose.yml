@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: downloader_bot
-    restart: unless_stopped
+    container_name: downloader-bot
+    restart: unless-stopped
     env_file:
       - .env
     volumes:
