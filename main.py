@@ -1,16 +1,17 @@
+import logging
+import mimetypes
 import os
 import uuid
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
 import requests
 import telebot
 from decouple import config
-from pathlib import Path
-import logging
-import mimetypes
-from urllib.parse import urlparse, unquote
 
 logger = telebot.logger
 
-API_KEY = config('API_KEY')
+API_KEY = str(config("API_KEY"))
 
 bot = telebot.TeleBot(API_KEY)
 telebot.logger.setLevel(logging.INFO)
@@ -19,9 +20,11 @@ DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
 
-@bot.message_handler(commands=['start'])
+@bot.message_handler(commands=["start"])
 def start(message):
-    bot.reply_to(message, "آدرس فایل موردنظر را ارسال کنید تا دانلود و برایتان ارسال شود.")
+    bot.reply_to(
+        message, "آدرس فایل موردنظر را ارسال کنید تا دانلود و برایتان ارسال شود."
+    )
 
 
 # Helper function
@@ -31,16 +34,9 @@ def is_valid_url(url: str) -> bool:
 
 
 def downloder_file(url: str) -> Path:
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
-    response = requests.get(
-        url,
-        stream=True,
-        timeout=30,
-        headers=headers
-    )
+    response = requests.get(url, stream=True, timeout=30, headers=headers)
 
     response.raise_for_status()
     parsed = urlparse(url)
@@ -53,7 +49,7 @@ def downloder_file(url: str) -> Path:
         filename = f"{uuid.uuid4().hex}{extension}"
 
     if extension and not Path(filename).suffix:
-        filename+= extension
+        filename += extension
 
     file_path = DOWNLOAD_DIR / filename
 
@@ -73,25 +69,45 @@ def download_file(message):
         bot.reply_to(message, "❌ لینک معتبر نیست.")
         return
 
+    bot.send_chat_action(message.chat.id, "upload_document")
+
+    status_message = bot.reply_to(message, "⏳ در حال دانلود...")
+
     try:
-        bot.send_chat_action(message.chat.id, "upload_document")
         file_path = downloder_file(url)
+
+        bot.edit_message_text(
+            "✅ دانلود انجام شد. در حال ارسال فایل...",
+            chat_id=status_message.chat.id,
+            message_id=status_message.message_id,
+        )
 
         with open(file_path, "rb") as document:
             bot.send_document(
                 chat_id=message.chat.id,
                 document=document,
-                reply_to_message_id=message.message_id
+                reply_to_message_id=message.message_id,
             )
-
+        bot.delete_message(
+            chat_id=status_message.chat.id,
+            message_id=status_message.message_id,
+        )
         file_path.unlink(missing_ok=True)
     except requests.exceptions.RequestException as e:
         logger.exception(e)
-        bot.reply_to(message, "❌ دانلود فایل با خطا مواجه شد.")
+        bot.edit_message_text(
+            "❌ دانلود فایل با خطا مواجه شد.",
+            chat_id=status_message.chat.id,
+            message_id=status_message.message_id,
+        )
 
     except Exception as e:
         logger.exception(e)
-        bot.reply_to(message, f"❌ Error:\n{e}")
+        bot.edit_message_text(
+            f"❌ Error:\n{e}",
+            chat_id=status_message.chat.id,
+            message_id=status_message.message_id,
+        )
 
 
 if __name__ == "__main__":
