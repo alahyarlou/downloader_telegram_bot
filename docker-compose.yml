@@ -1,0 +1,11 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: downloader_bot
+    restart: unless_stopped
+    env_file:
+      - .env
+    volumes:
+      - ./downloads:/app/downloads
